@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAS-1 | High-Value AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --sidebar-bg: #010409;
+            --accent: #00d9ff;
+            --text-main: #c9d1d9;
+            --user-bubble: #21262d;
+            --ai-bubble: #161b22;
+            --border: #30363d;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg-dark); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            transition: 0.3s;
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.2s;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .new-chat-btn:hover { background: #21262d; border-color: var(--accent); color: var(--accent); }
+
+        .history-section { flex: 1; overflow-y: auto; }
+        .history-item {
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #8b949e;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .history-item:hover { background: #161b22; color: var(--accent); }
+
+        /* --- MAIN AREA --- */
+        .main-chat { flex: 1; display: flex; flex-direction: column; position: relative; background: var(--bg-dark); }
+        
+        .chat-header {
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(13, 17, 23, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 30px 15% 100px 15%;
+            scroll-behavior: smooth;
+        }
+
+        /* --- BUBBLE ALIGNMENT --- */
+        .message-row { display: flex; width: 100%; margin-bottom: 25px; animation: fadeInUp 0.3s ease; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .user-row { justify-content: flex-end; }
+        .ai-row { justify-content: flex-start; }
+
+        .bubble {
+            max-width: 75%;
+            padding: 12px 18px;
+            line-height: 1.6;
+            font-size: 15px;
+            position: relative;
+        }
+
+        .user-bubble {
+            background: var(--user-bubble);
+            color: white;
+            border-radius: 18px 18px 0 18px;
+            border: 1px solid #3d444d;
+        }
+
+        .ai-bubble {
+            background: var(--ai-bubble);
+            color: #e6edf3;
+            border-radius: 18px 18px 18px 0;
+            border: 1px solid var(--border);
+        }
+
+        /* --- INPUT AREA --- */
+        .input-outer-container {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            padding: 20px 15%;
+            background: linear-gradient(transparent, var(--bg-dark) 40%);
+        }
+
+        .input-box {
+            background: #161b22;
+            border: 1px solid var(--border);
+            border-radius: 15px;
+            padding: 12px 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        #user-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            outline: none;
+            resize: none;
+            font-size: 15px;
+            max-height: 150px;
+            padding: 5px 0;
+        }
+
+        .send-btn {
+            background: var(--accent);
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .send-btn:hover { transform: scale(1.1); filter: brightness(1.2); }
+
+        /* Welcome Screen */
+        #welcome { text-align: center; margin-top: 15vh; }
+        #welcome h2 { font-size: 2.5rem; color: white; margin-bottom: 10px; }
+        #welcome p { color: #8b949e; font-size: 1.1rem; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <button class="new-chat-btn" onclick="startNewChat()">
+            <i class="fas fa-plus"></i> New Chat
+        </button>
+        <div class="history-section" id="history-list"></div>
+    </aside>
+
+    <main class="main-chat">
+        <div class="chat-header">
+            <span style="font-weight: 700; letter-spacing: 1px; color: var(--accent);">HAS-1</span>
+            <div style="font-size: 12px; color: #8b949e;">Powered by High-Value Logic</div>
+        </div>
+
+        <div id="chat-container">
+            <div id="welcome">
+                <div style="width: 70px; height: 70px; background: var(--accent); border-radius: 15px; display: flex; align-items: center; justify-content: center; margin: 0 auto 25px auto; box-shadow: 0 0 30px rgba(0,217,255,0.2);">
+                    <i class="fas fa-bolt" style="font-size: 35px; color: black;"></i>
+                </div>
+                <h2>I am HAS-1</h2>
+                <p>How can I assist you today, Boss?</p>
+            </div>
+        </div>
+
+        <div class="input-outer-container">
+            <div class="input-box">
+                <textarea id="user-input" placeholder="Message HAS-1..." rows="1"></textarea>
+                <button class="send-btn" onclick="sendMessage()">
+                    <i class="fas fa-arrow-up"></i>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const historyList = document.getElementById('history-list');
+
+        // Auto-resize textarea
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // Remove welcome screen
+            const welcome = document.getElementById('welcome');
+            if (welcome) welcome.remove();
+
+            appendMessage(text, true);
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await response.json();
+                if (data.reply) appendMessage(data.reply, false);
+            } catch (e) {
+                appendMessage("System Error: Neural connection lost.", false);
+            }
+        }
+
+        function appendMessage(text, isUser) {
+            const row = document.createElement('div');
+            row.className = `message-row ${isUser ? 'user-row' : 'ai-row'}`;
+            
+            row.innerHTML = `
+                <div class="bubble ${isUser ? 'user-bubble' : 'ai-bubble'}">
+                    ${text.replace(/\n/g, '<br>')}
+                </div>
+            `;
+            
+            chatContainer.appendChild(row);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function startNewChat() {
+            // Save to history before clearing
+            const messages = chatContainer.querySelectorAll('.bubble');
+            if (messages.length > 0) {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                const preview = messages[0].innerText.substring(0, 25);
+                historyItem.innerHTML = `<i class="far fa-comment-alt"></i> ${preview}...`;
+                historyList.prepend(historyItem);
+            }
+
+            chatContainer.innerHTML = `
+                <div id="welcome">
+                    <div style="width: 70px; height: 70px; background: var(--accent); border-radius: 15px; display: flex; align-items: center; justify-content: center; margin: 0 auto 25px auto;">
+                        <i class="fas fa-bolt" style="font-size: 35px; color: black;"></i>
+                    </div>
+                    <h2>New Session: HAS-1</h2>
+                    <p>Context cleared. System ready.</p>
+                </div>`;
+            userInput.value = '';
+            userInput.style.height = 'auto';
+        }
+
+        // Enter to send
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
