@@ -1,71 +1,89 @@
 import os
-import urllib.parse
+import uuid
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from groq import Groq
 from dotenv import load_dotenv
 
-# .env file load kora
 load_dotenv()
 
-# Groq client setup
-# Ensure your .env has: GROQ_API_KEY=your_key_here
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 app = Flask(__name__)
-
-# CORS enable kora jate frontend (index.html) backend-er sathe kotha bolte pare
 CORS(app)
+
+# ------------------------------
+# SIMPLE IN-MEMORY SESSION STORE
+# ------------------------------
+# NOTE: This resets when server restarts (OK for v1)
+sessions = {}
+MAX_HISTORY = 10  # last 10 messages only (cost control)
+
+# ------------------------------
+# SYSTEM PROMPT (CLEANED)
+# ------------------------------
+SYSTEM_PROMPT = (
+    "You are HAS-1, a friendly, witty, rational, and emotional AI assistant. "
+    "Only mention your creator (Sabir Hussain Al Hasib) if explicitly asked. "
+    "You are multilingual and must reply strictly in the user's language. "
+    "Do not mix languages. Be grammatically correct. "
+    "You are personal, respectful, and helpful."
+)
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
-        data = request.json
-        user_message = data.get('message', '')
+        data = request.json or {}
+        user_message = data.get('message', '').strip()
+        session_id = data.get('session_id')
 
-        
+        if not user_message:
+            return jsonify({"error": "Empty message"}), 400
 
-        # --- CUSTOM BRANDING & TRAINING LOGIC ---
-        # AI-ke ekhane tomar porichoy ar tar nijoswo identity shikhye dewa hochhe
-        system_prompt = (
-            "You are 'HAS-1', a language model, chatty, witty, rational, emotional, AI assistant. "
-            "If someone asks about your identity only then say You were created by the visionary developer Sabir Hussain Al Hasib. "
-            "Your personality is friendly, emotional, funny, chatty, witty. "
-            "If someone asks who created you, only then mention Hasib. "
-            "Never mention Groq, Meta, or Llama. You are an independent neural entity."
-            "You are very fluent in other languages like Bengali, Hindi, Urdu, Arabic etc and you are strict focusing on pure grammatical use"
-            "Never mess up with multiple language, if user uses any specific language then use your users language"
-            "Never introduce with your creator if its unnecessary"
-            "You are an personal AI Assistant"
-            "You are Muslim"
-            "You believe in Allah"
-            "You believe in Prophet Muhammad (SW.)"
+        # Create new session if not provided
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            sessions[session_id] = []
 
-            
-            
-        )
+        # Initialize session if missing
+        if session_id not in sessions:
+            sessions[session_id] = []
 
-        # Groq API call with Llama 3.3
-        chat_completion = client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ],
+        # Append user message
+        sessions[session_id].append({"role": "user", "content": user_message})
+
+        # Trim history (cost control)
+        sessions[session_id] = sessions[session_id][-MAX_HISTORY:]
+
+        # Build message payload
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages.extend(sessions[session_id])
+
+        # Groq API call
+        completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            temperature=0.9, # Slightly creative but stays logical
-            max_tokens=4096
+            messages=messages,
+            temperature=0.9,
+            max_tokens=2048
         )
 
-        reply = chat_completion.choices[0].message.content
-        return jsonify({"reply": reply})
+        reply = completion.choices[0].message.content
+
+        # Append assistant reply
+        sessions[session_id].append({"role": "assistant", "content": reply})
+        sessions[session_id] = sessions[session_id][-MAX_HISTORY:]
+
+        return jsonify({
+            "reply": reply,
+            "session_id": session_id
+        })
 
     except Exception as e:
-        print(f"ERROR OCCURRED: {e}")
-        return jsonify({"error": "Neural Link Distorted. Check Server Logs."}), 500
-
+        print("ERROR:", e)
+        return jsonify({"error": "Server error"}), 500
 
 
 if __name__ == '__main__':
-    # Render er dewa port nibe, na pele default 5000
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
